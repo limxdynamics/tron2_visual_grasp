@@ -1,0 +1,18 @@
+name: tron2_visual_grasp
+channels:
+  - conda-forge
+  # - defaults
+dependencies:
+  - python=3.10
+  - numpy<2.0
+  - pyyaml>=6.0
+  - pip
+  - pip:
+      # 4.8.1.78 is the first wheel with the libwebp fix (CVE-2023-4863); ArUco is in the main package since 4.7.
+      - opencv-python==4.8.1.78
+      - flask>=3.1.3          # web_debug live view / control panel
+      - pyrealsense2>=2.54
+      - python-can>=3.3.4
+      - websocket-client>=1.6
+      - mujoco==3.16.0        # demo only: 3D robot view (./run.sh demo); Apache-2.0
+      - pyAgxArm @ git+https://github.com/agilexrobotics/pyAgxArm.git@e7aef17d54cac80cbaeb1b4110ab3d8f1337a95b

@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Smoke and regression tests (no hardware)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: |
+            environment.yml
+            tests/requirements.txt
+
+      - name: Cache the TRON2 3D model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tron2_visual_grasp
+          key: tron2-model-${{ hashFiles('drivers/sim/model.py') }}
+
+      - name: Install dependencies from environment.yml
+        run: |
+          python -m pip install --upgrade pip pyyaml
+          # Same pins as the conda env: conda deps (minus python/pip) plus the pip list.
+          python - <<'EOF' > /tmp/requirements-env.txt
+          import yaml
+          deps = yaml.safe_load(open("environment.yml"))["dependencies"]
+          for d in deps:
+              if isinstance(d, dict):
+                  print("\n".join(d["pip"]))
+              elif d.split("=")[0].split("<")[0].split(">")[0] not in ("python", "pip"):
+                  print(d)
+          EOF
+          cat /tmp/requirements-env.txt
+          python -m pip install -r /tmp/requirements-env.txt -r tests/requirements.txt
+
+      - name: Shell syntax
+        run: bash -n run.sh
+
+      - name: Static check (pyflakes)
+        # utils/__init__.py is skipped: it only re-exports names (unmodified upstream file, see NOTICE).
+        run: python -m pyflakes calibration drivers scripts tests $(ls utils/*.py | grep -v __init__)
+
+      - name: Tests
+        # xvfb gives MuJoCo an OpenGL context for the demo's 3D view test.
+        env:
+          MUJOCO_GL: glfw
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" python -m pytest -v tests

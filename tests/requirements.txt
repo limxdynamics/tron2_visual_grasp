@@ -1,0 +1,4 @@
+# Test-only dependencies, on top of environment.yml.
+pytest==9.1.1
+websockets==16.1.1   # mock TRON2 upper-layer server
+pyflakes==3.4.0      # static check in CI

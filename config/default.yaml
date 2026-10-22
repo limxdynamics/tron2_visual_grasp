@@ -1,0 +1,302 @@
+camera:
+  type: realsense_d405
+  serial: null                 # null binds by model from type; set it when two units of the same model are attached
+  # 848x480 cut per-frame CPU ~2x but the ~20px far ball flickered
+  # out of detection and the approach timed out; the stage timings showed
+  # perception was not the bottleneck.
+  color_width: 1280
+  color_height: 720
+  fps: 30
+  auto_exposure: true          # true: auto exposure; false: use exposure_us
+  exposure_us: 11000           # D405 color exposure in microseconds; used only in manual mode
+
+calibration:
+  aruco:
+    # RGB-D vs solvePnP depth cross-check during calibration read a consistent
+    # RGB-D/PnP ratio ~1.04, i.e. PnP under-ranged the marker -> the printed side
+    # is ~0.092*1.04 ~= 0.096m, not 0.092m. Confirm with calipers on the black
+    # border's outer edge; marker_length scales hand-eye translation 1:1.
+    marker_length_m: 0.096
+    dict_id: 0
+    target_marker_id: 0
+  hand_eye_method: TSAI
+  # Fixed camera-to-gripper rotation trim, applied in the TCP/gripper frame before
+  # composing T_cam2base. Use this only for a measured mounting-axis mismatch;
+  # prefer rerunning hand-eye calibration when the marker invariance test is poor.
+  hand_eye_rotation_compensation_rpy_rad:
+    roll: 0.0
+    pitch: 0.0
+    yaw: 0.0
+  hand_eye_compensation_m:
+    x: 0.00
+    y: 0.0
+    z: 0.0 #0.023
+  
+
+detection:
+  # Classical HSV + round-contour filtering on CPU (utils/opencv_tennis.py).
+  conf_threshold: 0.35
+  tennis:
+    class_name: "tennis ball"
+    # OpenCV HSV: H=0..179, S/V=0..255. Yellow/green felt; tolerate shadows.
+    # Tune from actual camera frames if white balance or lighting changes.
+    hsv_lower: [22, 65, 40]
+    hsv_upper: [48, 255, 255]
+    morph_kernel_px: 3       # close small seam gaps, remove isolated noise
+    min_area_px: 80          # reject tiny unreliable blobs
+    max_area_fraction: 0.35  # reject large background regions
+    min_aspect_ratio: 0.72
+    min_circularity: 0.68
+    min_solidity: 0.90
+    min_circle_fill: 0.68
+    min_colour_fraction: 0.65
+    max_det: 10
+
+robot:
+  type: tron2                  # tron2 | piperx
+  tron2:
+    robot_ip: 10.192.1.2       # upper-layer WebSocket API, ws://ip:port
+    port: 5000
+    accid: null                # request account; null learns it from notify_robot_info (set it only to pin a specific robot)
+    stream_hz: 100.0           # must stay above 10Hz: controller command_timeout is 0.2s
+    feedback_hz: 30.0
+    connect_timeout_s: 10.0
+    feedback_timeout_s: 2.0
+    posture_timeout_s: 30.0    # wait for matching response_wf_stand_kneel; failure/timeout aborts
+    # The WF stand takes the arm away; in testing a program restart got it back.
+    # A joint move the arm ignores after a stand reconnects and retries this long.
+    arm_reacquire_timeout_s: 15.0
+    motion_timeout_extra_s: 4.0
+    speed_percent: 100         # whole-arm motion speed, 1-100 (%); lower is slower, 50 = half speed
+    joint_speed_rad_s: 3.0     # per-joint speed cap for request_yg_servoj moves (2.8 ran OK in testing with settle <0.25s; piper joints top out ~3.1 rad/s, so this is the ceiling)
+    # Driver-side safety cap on every request_twist, on top of the mission's own limits
+    # (mission.approach.control). Larger requests are clipped and reported once.
+    max_twist_mps: 0.8         # |x| and |y| base velocity cap, m/s
+    max_twist_rps: 1.0         # |yaw| base rate cap, rad/s
+    # Look-down observe joints (rad): the wrist camera sees the table and top-down
+    # grasps stay reachable. Joints=0 aims the camera forward, putting objects far
+    # ahead where a straight-down grasp is unreachable. Measured on the real arm.
+    # j4 kept just inside the piper_x wrist limit (+/-1.5533 rad = +/-89 deg).
+    observe_joints: [-0.046, 1.238, -1.931, 1.530, -0.023, 0.046]
+    # Stowed joints the arm folds to before the body stands back up.
+    park_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    # The arm servo controller reports/accepts ee poses RELATIVE to prepare_ee_pose (a position
+    # offset along base axes; orientation right-multiplied onto prepare). The driver
+    # composes them back to absolute base poses so hand-eye calibration and grasp
+    # share one rigid frame. Leave prepare_ee_pose null to auto-derive it from FK at
+    # prepare_joints (only the orientation matters). If calibration translation still
+    # blows up, paste the arm controller's prepare_ee_pose here.
+    apply_prepare_offset: true   # false restores the raw prepare-relative poses
+    prepare_joints: null         # null uses park_joints; FK'd only when prepare_ee_pose is null
+    # ee_link pose at the prepare posture, copied from the arm controller's
+    # prepare_ee_pose parameter: [x,y,z, qw,qx,qy,qz].
+    prepare_ee_pose: [0.238598, 0.0, 0.229199, 0.521292, 0.521292, 0.47776, -0.47776]
+  piper:
+    model: piper_x              # piper | piper_h | piper_l | piper_x
+    firmware: v189             # default | v183 | v188 | v189, from get_firmware()
+    interface: socketcan
+    channel: can0
+    bitrate: 1000000
+    speed_percent: 50
+    tcp_offset_m: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # gripper TCP relative to the flange
+    enable_timeout_s: 10.0
+    motion_settle_s: 0.5
+    motion_timeout_extra_s: 3.0
+    feedback_timeout_s: 2.0
+  gripper:
+    tron2:
+      max_distance_m: 0.09       # physical jaw span used to normalise request_set_yg_claw_cmd
+      scale: 1.0                 # full-scale value of data.position (1.0 for 0..1, 100 for 0..100)
+      invert: false              # true when a larger position means closed
+      default_effort: 10.0
+      max_effort: 10.0
+      settle_s: 0.1            # no jaw feedback: retain a closing/opening wait (0.5 also worked in testing; raise if the ball slips out)
+    piper:
+      max_distance_m: 0.07
+      default_force_n: 1.0
+      max_force_n: 3.0
+      grasp_min_width_m: 0.004   # jaws wider than this after closing means an object is held
+      settle_s: 0.8
+  # tron2 ignores x..yaw and moves to robot.tron2.observe_joints; only duration
+  # is read (a minimum move time). The pose fields are used by piperx only.
+  ready_pose:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    roll: 0.0
+    pitch: 0.0
+    yaw: 0.0
+    duration: 0.0
+
+# Whole-body task (scripts/squat_grasp.py): stand still and watch, and once a
+# target is in view drive up to it (approach), squat, grasp it with the wrist
+# camera, release it at drop_joints, then stand up. With approach.enabled false
+# the base never moves, so the target must already be within reach of the squatted arm.
+mission:
+  repeat: true                # release, stand, return to watch, repeat; dry-run stays single-cycle
+  cycle_delay_s: 0.0           # pause after standing up, before returning to watch
+  # One class name or a list. With a list, target_priority decides which object wins:
+  # nearest = closest of any listed class; confidence = strongest detection;
+  # centered = closest to the image centre column; order = first listed class visible.
+  target_class: 
+    - "tennis ball"
+  target_priority: centered   # nearest | confidence | centered | order
+  # Camera used while watching for the target, merged over the top-level camera.
+  # Matching the top-level camera shares the single wrist D405 for both stages.
+  watch_camera:
+    type: realsense_d405
+    serial: null
+  # Arm joints held while watching so the camera looks forward at the floor ahead.
+  watch_joints: [0.0, 0.77, -0.626, 0.701, 0.0, 0.0]
+  # true moves the arm to robot.tron2.observe_joints after the kneel and body pitch
+  # waits; false grasps straight from watch_joints, skipping that move.
+  observe_before_grasp: true
+  # Arm joints (rad) to move to before opening after a successful grasp, while
+  # still kneeling; null releases at the park pose.
+  drop_joints: null
+  detect_on_frames: 3          # frames with a target in view before the approach (or squat) starts
+  # Count those hits anywhere in the last N frames instead of consecutively.
+  # Confidence hovers around the threshold and breaks a consecutive run almost
+  # every time. 0 restores the strict consecutive rule.
+  detect_window_frames: 8
+  grasp_timeout_s: 5.0
+  camera_switch_delay_s: 1.0
+  # Visual servo on the watch camera that drives the base up to the target
+  # before the squat. 2D mode (stop_bottom_ratio set) needs no depth or
+  # hand-eye. Values are field-tuned on the real robot.
+  approach:
+    enabled: true
+    timeout_s: 120.0
+    twist_hz: 30.0             # request_twist resend rate; the base stops if it goes quiet
+    control:
+      target_distance_m: 0.45
+      distance_tolerance_m: 0.06
+      center_tolerance: 0.04
+      center_offset: 0.0       # aim column as a fraction of half-width; +right, to cancel camera mounting bias
+      forward_gain: 0.4
+      yaw_gain: 2.4
+      # In 2D mode the forward speed ramps between these two with the gap left to
+      # the stop line: min at the line, max with the target still far up frame.
+      min_forward_mps: 0.15
+      # The base ignores anything slower than this, so corrections are lifted past
+      # it rather than sent as commands that quietly do nothing.
+      deadzone_mps: 0.12
+      max_forward_mps: 0.6     # 0.8 tried: more blur, target lost more often
+      max_yaw_rps: 0.7         # 0.9 tried: overshot the target side to side
+      # Turning in place has its own dead zone: below this the base does not
+      # rotate, so an aim error outside center_tolerance is lifted up to it.
+      yaw_deadzone_rps: 0.2
+      creep_forward_mps: 0.3   # 2D mode only uses it as an on/off flag; 0 stops the drive
+      search_yaw_rps: 0.0
+      arrive_frames: 5
+      commit_distance_m: 0.9
+      lost_frames: 5
+      # Detection drops single frames during the drive; keep the
+      # last forward speed, without turning, for this many misses (~0.2s at 30fps).
+      hold_lost_frames: 6
+      # 0.65 was tuned on the old forward D435i; on the wrist D405 at watch_joints
+      # it stopped ~1.3 m short. The feet cover the lower
+      # corners below ~0.74, but the centre column stays clear to the bottom.
+      # watch_joints raised to [0,0.5,-0.5,0.6] aims further ahead, so
+      # 0.7 stopped too far; re-tune whenever watch_joints changes.
+      stop_bottom_ratio: 0.6  # stop when the bbox bottom reaches this fraction of frame height; null uses depth instead
+      edge_margin_px: 12
+  posture:
+    # wait after the WF kneel success reply; the body only pitches once fully knelt.
+    # 3.5: reset + pitch 0.49 were acknowledged but the body never moved.
+    kneel_dwell_s: 6.0
+    # grasp: the arm stays parked for this wait before moving again; the WF stand
+    # levels the body pitch itself.
+    # 0.05: the arm then ignored joint commands for >3s after the WF stand;
+    # servoj answered fail_invalid_cmd until ~4.5s after the stand success reply.
+    stand_dwell_s: 2.0
+    # Sent after the kneel, preceded by a pitch reset: pitching before the kneel
+    # does not work, and without a reset a second-cycle 0.49 never moved.
+    body_pitch_rad: 0.49
+    pitch_reset_dwell_s: 1.0    # gap between the pitch reset and the pitch command
+    # No pitch feedback exists, so this wait alone keeps the grasp from starting
+    # while the body still pitches: 0.2 grasped mid-pitch.
+    pitch_dwell_s: 3.0      # 0.6 also worked in testing; raise it if the arm starts moving before the body settles
+    # Legacy height-step settings, no longer used by WF kneel/stand:
+    # squat_steps: 50
+    # squat_dwell_s: 0.05         # per-step settle time between request_base_height commands (0.10 also worked in testing; raise if steps get dropped / squat ends shallower)
+  web_port: 8888               # browser debug page; 0 disables it
+  web_frames: true             # false keeps the status rows but stops the video
+
+grasp_pipeline:
+  grasp:
+    move_duration_s: 1.0       # grasp interpolation time before speed_percent scaling
+    depth_quantile: 0.5
+    pregrasp_offset_m: 0.080
+    # How far below the detected top surface to descend so the jaws straddle the
+    # object. Was 0.125, which drove the TCP ~12.5cm below the surface: fine for
+    # tall table-top objects, but floor objects sit ON the ground with no clearance
+    # below, so that depth slammed the gripper into the floor. 0.04 straddled
+    # typical small targets (can/bag/foam_box); the current 0.0 stops at the detected surface.
+    # Raise it if grasps close too high, lower it if the gripper hits the floor.
+    insertion_depth_m: 0.0
+    # Hard safety floor for the grasp TCP Z in the base frame (grasp_z is clamped to
+    # this in utils/transforms.py). Was -0.8 (0.8m below the base), so it never
+    # engaged and gave zero floor protection. The floor sat at ~base z 0 here, so
+    # 0.0 keeps the TCP above floor level; a negative value allows going below it.
+    # Raise it if the gripper still touches down; lower it if it can't reach floor objects.
+    # Base frame rides on the body, so this tracks posture: at squat_steps 20 +
+    # pitch 0.5 a floor watermelon rind read base z -0.28 and -0.1 held the grasp
+    # 18 cm above it. Re-measure if the squat changes.
+    min_base_z_m: -0.30
+    top_down: true            # must be true for keep/align to apply; in any other mode it forces tool-X straight down (base -Z)
+    # The first align version (it re-solved ee_link +X) commanded an ee approach axis
+    # that pointed up/sideways (tool-forward ~[+0.61,-0.71,+0.34]) for far floor
+    # objects, so the wrist stalled ~45 deg short ("Target unreachable") and never
+    # descended. keep holds the reachable look-down observe orientation and descends
+    # in base Z instead; align now approaches along the real tool axis (ee_link +Y).
+    orientation_mode: align   # keep = hold current wrist + descend (manual align); align = auto-rotate jaws to object via hand-eye (approach = real tool axis ee_link +Y); vertical = force straight down
+    gripper_open_flip: false  # set true if the jaws close across the object's long axis instead of the short one
+    # Closed-loop approach: keep detecting with the wrist camera while the arm moves
+    # and steer onto the latest position, so a rolling ball is followed.
+    # Orientation stays locked to the first solve; only the position is updated.
+    tracking:
+      enabled: true
+      max_speed_m_s: 0.80        # TCP approach speed cap while tracking (0.60 also worked in testing: 688mm in 1.66s)
+      max_rot_speed_rad_s: 3.0   # wrist rotation rate toward the grasp orientation (2.0 also worked in testing)
+      smoothing: 0.6             # 0 = jump to every new detection, ->1 = heavier filtering
+      goal_deadband_m: 0.008     # ignore goal changes smaller than this (detection noise -> shake)
+      commit_dist_m: 0.05        # finish with a short blind move once this close
+      blind_commit_dist_m: 0.12  # object out of view (too close for D405) within this -> commit to last goal
+      lost_timeout_s: 1.0        # abort if lost this long farther than blind_commit_dist_m
+      timeout_s: 10.0
+      final_duration_s: 0.2      # last blind move, before speed_percent scaling (0.3 also worked in testing)
+    # Per-object grasp geometry.
+    # jaw_axis: short (default) = jaws close across the min-area-rect short edge;
+    #           long = jaws close across the long edge instead.
+    # offset_ratio: slide the grasp point along the long axis toward one short edge,
+    #               0.0 = mask centre, 1.0 = that end of the object.
+    # edge: near = the short edge closest to the robot (smaller base x; camera depth
+    #       decides when no hand-eye transform is available), far = the other one.
+    class_grasp_point: {}
+    # Per-object grasp offset in the robot base frame, in meters: +x forward, +y left, +z up.
+    # Keys are detector class names; "default" covers any class not listed. min_base_z_m still applies.
+    class_offset_m: {}
+
+# Hardware-free demo (./run.sh demo, i.e. squat_grasp.py --sim). Only read with
+# --sim: the camera and robot switch to the simulated drivers in drivers/sim and
+# the keys under overrides are merged over this file. A real run ignores it.
+sim:
+  seed: null                   # null = new ball positions every run; an integer repeats them
+  spawn_distance_m: [1.0, 1.6] # new balls appear this far ahead of the robot...
+  spawn_lateral_m: [-0.6, 0.6] # ...and this far to the side (+left)
+  # Third-person 3D view of the robot in the web console. Needs MuJoCo (in
+  # environment.yml) and downloads the TRON2 model on first use (~50 MB, see
+  # drivers/sim/model.py). Headless machines: set MUJOCO_GL=egl or osmesa.
+  view3d:
+    enabled: true
+    hz: 15                     # render rate; without a GPU each frame can take ~1 s
+    width: 640
+    height: 480
+  overrides:
+    mission:
+      posture:                 # the simulated body has nothing to settle, so wait less
+        kneel_dwell_s: 1.0
+        pitch_reset_dwell_s: 0.2
+        pitch_dwell_s: 1.0
+        stand_dwell_s: 1.0

@@ -1,0 +1,8 @@
+# Shell scripts must keep LF endings, or bash fails on Windows checkouts
+# ("set: pipefail: invalid option name").
+*.sh  text eol=lf
+
+# Binary assets: never convert line endings.
+*.pdf binary
+*.npz binary
+*.gif binary

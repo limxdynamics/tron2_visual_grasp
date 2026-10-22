@@ -1,0 +1,23 @@
+info
+Log
+log/
+data
+unused/*
+__pycache__/
+*.pyc
+sdk/*
+*.npz
+# Simulated eye-in-hand mount for ./run.sh demo; real calibrations stay local.
+!config/calibration/sim_d405/hand_eye.npz
+captures/
+nohup.out
+*.log
+*.mp4
+models/
+*.pt
+*.pth
+*.onnx
+*.engine
+.env
+.vscode/
+.pytest_cache/

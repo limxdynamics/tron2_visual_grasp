@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/media/banner.png" alt="TRON2 视觉抓取：TRON2 跪下伸臂去抓网球（由演示模拟渲染）" width="100%">
+</p>
+
 <h1 align="center">TRON2 视觉抓取</h1>
 
 <p align="center">
@@ -68,17 +72,9 @@ conda env create -f environment.yml    # 创建名为 tron2_visual_grasp 的环�
 
 ## 🧭 工作原理
 
-```mermaid
-flowchart LR
-    A[原地待机观察] --> B[检测到网球]
-    B --> C[视觉伺服靠近]
-    C --> D[跪下]
-    D --> E[腕部相机估计抓取位姿]
-    E --> F[抓取]
-    F --> G[投放姿态松爪]
-    G --> H[站起]
-    H --> A
-```
+<p align="center">
+  <img src="docs/media/mission_zh.png" alt="抓取任务的一个循环：观察、接近、跪下并俯身、跟踪并抓取、放下并站起，然后重复" width="100%">
+</p>
 
 1. **观察**：机械臂保持前视姿态，检测器逐帧扫描。
 2. **靠近**：2D 视觉伺服驱动底盘，直到目标落在画面中的预定位置。
@@ -202,11 +198,19 @@ conda env create -f environment.yml    # 创建名为 tron2_visual_grasp 的环�
 | `min_colour_fraction` | 轮廓内颜色占比 |
 | `max_det` | 每帧最多保留的候选数 |
 
+<p align="center">
+  <img src="docs/media/detection_zh.png" alt="网球检测器：腕部相机画面、HSV 掩码、形状与边界过滤、最终检测结果" width="100%">
+</p>
+
 `detection.conf_threshold` 是上述形状指标的平均分阈值。贴着画面边缘的球会被丢弃，因为轮廓不完整时中心和尺寸不可靠。
 
 **现场调参**：`grasp` / `dry-run` 的调试页（`http://<主机IP>:8888`）可以实时拖动 HSV 上下限和相机曝光。调节只对当前进程有效，确认合适后把数值写回配置文件。
 
 ### 手眼标定
+
+<p align="center">
+  <img src="docs/media/handeye_zh.png" alt="手眼标定：打印标记、./run.sh calib、求解、./run.sh verify" width="100%">
+</p>
 
 1. 按 100% 原始尺寸打印 [aruco100x100.pdf](aruco100x100.pdf)（不要选“适合页面”缩放），其中是 OpenCV `DICT_4X4_50` 的 0 号标记，黑色方块边长 100 mm。平放在相机视野内，用卡尺量黑框外边长，填入 `calibration.aruco.marker_length_m`（随附配置中的 0.096 m 是我们自己那张打印件的实测值）。
 2. 运行 `./run.sh calib`：机械臂以当前位姿为中心自动遍历 26 个位姿并采样（≥5 个样本即可求解，建议 ≥15）；加 `--manual` 改为手动拖动示教（仅 PiperX；TRON2 不支持拖动示教）。结果保存到 `config/calibration/realsense_d405/hand_eye.npz`。
@@ -231,6 +235,14 @@ conda env create -f environment.yml    # 创建名为 tron2_visual_grasp 的环�
 
 抓取位姿参数在 `grasp_pipeline.grasp`（预抓取偏移、插入深度、最低高度、夹爪朝向等）。
 
+<p align="center">
+  <img src="docs/media/grasp_chain_zh.png" alt="从检测与深度经手眼变换得到基座系下的抓取位姿" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/media/posture_timeline_zh.png" alt="抓取前后的姿态时序，取 default.yaml 中的等待时间" width="100%">
+</p>
+
 下蹲使用 `request_wf_stand_kneel`，`data.action` 分别为 `kneel`（跪下）和 `stand`（站起），不再发送高度步进命令。
 必须等跪好（`kneel_dwell_s`）后才能低头：先发送俯仰复位清掉上一轮的设定值，等待 `pitch_reset_dwell_s` 后，再设置 `body_pitch_rad` 并等待 `pitch_dwell_s`。俯仰是相对量，站起只会把身体摆正、不会清零设定值，不复位的话第二轮俯仰不会动。站起前不再单独发送恢复俯仰命令。
 请求使用 `robot.tron2.accid`（须与机器人 `notify_robot_info` 推送的一致；设为 `null` 则自动获取）、每次新生成的 GUID 和当前毫秒时间戳。
@@ -252,6 +264,10 @@ conda env create -f environment.yml    # 创建名为 tron2_visual_grasp 的环�
 配置在 `sim` 一节，其中 `sim.overrides` 只在演示模式下覆盖其余配置（缩短姿态等待时间）。模拟器没有动力学、打滑、延迟，除少量图像噪点外也没有传感器噪声，所以演示能跑通不代表真机参数已经调好。
 
 ### 目录结构
+
+<p align="center">
+  <img src="docs/media/architecture_zh.png" alt="入口脚本和与硬件无关的工具模块通过 make_robot / make_camera 使用驱动：TRON2、PiperX、RealSense D405 及其模拟版本" width="100%">
+</p>
 
 ```
 config/default.yaml      全部参数（唯一配置来源）

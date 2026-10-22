@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/media/banner.png" alt="TRON2 Visual Grasping: TRON2 kneels and reaches for a tennis ball (rendered from the demo simulation)" width="100%">
+</p>
+
 <h1 align="center">TRON2 Visual Grasping</h1>
 
 <p align="center">
@@ -70,17 +74,9 @@ Open `http://<host-ip>:8888` during `dry-run` or `grasp` to watch the camera vie
 
 ## 🧭 How it works
 
-```mermaid
-flowchart LR
-    A[Watch in place] --> B[Ball detected]
-    B --> C[Visual-servo approach]
-    C --> D[Kneel]
-    D --> E[Wrist-camera grasp pose]
-    E --> F[Grasp]
-    F --> G[Release at drop pose]
-    G --> H[Stand up]
-    H --> A
-```
+<p align="center">
+  <img src="docs/media/mission_en.png" alt="One cycle of the grasp mission: watch, approach, kneel and pitch, track and grasp, drop and stand, then repeat" width="100%">
+</p>
 
 1. **Watch**: the arm holds a look-ahead pose and the detector scans each frame.
 2. **Approach**: a 2D visual servo steers the base until the target sits at the right spot in the image.
@@ -204,11 +200,19 @@ The detector lives in [utils/opencv_tennis.py](utils/opencv_tennis.py); its para
 | `min_colour_fraction` | Share of in-range pixels inside the contour |
 | `max_det` | Max candidates kept per frame |
 
+<p align="center">
+  <img src="docs/media/detection_en.png" alt="Tennis-ball detector: wrist frame, HSV mask, shape and border filters, final detection" width="100%">
+</p>
+
 `detection.conf_threshold` thresholds the mean of these shape scores. Balls touching the image border are dropped, since a clipped silhouette gives an unreliable centre and size.
 
 **Tuning on site**: the `grasp` / `dry-run` debug page (`http://<host-ip>:8888`) has live sliders for the HSV bounds and camera exposure. Changes only last for the running process; copy good values back into the config.
 
 ### Hand-eye calibration
+
+<p align="center">
+  <img src="docs/media/handeye_en.png" alt="Hand-eye calibration: print the marker, ./run.sh calib, solve, ./run.sh verify" width="100%">
+</p>
 
 1. Print [aruco100x100.pdf](aruco100x100.pdf) at 100 % (actual size, no fit-to-page); it holds OpenCV `DICT_4X4_50` marker id 0 with a 100 mm black square. Lay it flat in view, measure the outer edge of the black border with calipers, and set `calibration.aruco.marker_length_m` (the shipped 0.096 m was measured on our own print).
 2. Run `./run.sh calib`: the arm steps through 26 poses around its current pose and samples automatically (≥5 samples to solve, ≥15 recommended); `--manual` switches to hand guiding (PiperX only; TRON2 has no hand guiding). The result is saved to `config/calibration/realsense_d405/hand_eye.npz`.
@@ -230,6 +234,14 @@ Implemented in [scripts/squat_grasp.py](scripts/squat_grasp.py), configured unde
 | `web_port` | Debug page port |
 
 Grasp-pose parameters (pre-grasp offset, insertion depth, minimum height, jaw orientation) are under `grasp_pipeline.grasp`.
+
+<p align="center">
+  <img src="docs/media/grasp_chain_en.png" alt="From detection and depth to a base-frame grasp pose through the hand-eye transform" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/media/posture_timeline_en.png" alt="Posture timing around the grasp with the default.yaml dwell times" width="100%">
+</p>
 
 The squat uses `request_wf_stand_kneel` with `data.action: kneel` / `stand`, not
 height increments. The body pitches
@@ -260,6 +272,10 @@ Common options: `--target-class <name>`, `--display` (local preview windows), `-
 Settings live under `sim` in the config, and `sim.overrides` is merged over the rest of the file in demo mode only (shorter posture waits). The simulator has no dynamics, slip, latency or sensor noise beyond a little image grain, so a working demo says nothing about tuning for the real robot.
 
 ### Layout
+
+<p align="center">
+  <img src="docs/media/architecture_en.png" alt="Entry points and hardware-independent utils use make_robot and make_camera; drivers implement TRON2, PiperX, RealSense D405 and their simulated versions" width="100%">
+</p>
 
 ```
 config/default.yaml      all parameters (single source of truth)

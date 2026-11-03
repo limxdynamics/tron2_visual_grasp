@@ -32,17 +32,16 @@ locks the grasp onto the object with the same camera, drops it off, stands back 
 back to watching for the next one. The first built-in target is the **tennis ball**; more object types
 are on the way.
 
-## ✨ Highlights
+## Highlights
 
 - **End-to-end mobile pick, on a loop**: watch → visual-servo approach → kneel → wrist-camera grasp → drop → stand up → repeat.
 - **No GPU, no neural network**: the detector is pure OpenCV (HSV colour + round-contour filtering), so it runs on a laptop or a Jetson CPU with zero model downloads.
 - **Closed-loop grasping**: the wrist camera keeps detecting while the arm moves and steers onto the latest position, so a ball that rolls a little is still caught.
 - **One-command hand-eye calibration**: the arm walks through 26 poses around an ArUco marker on its own, solves, and a second command verifies the result.
-- **Live web console**: camera streams, mission status and a Stop button in the browser, plus live HSV / exposure sliders for tuning the detector on site.
-- **Try it without hardware**: `./run.sh demo` runs the full mission on a simulated TRON2 and wrist camera, viewed in the browser.
+- **Live web console**: camera streams, mission status, a Stop button and live detector tuning in the browser.
 - **Hardware behind clean interfaces**: robot and camera drivers sit behind one contract each; TRON2 and an AgileX PiperX arm are supported today.
 
-## 🚀 Quick start
+## Quick start
 
 ### Try it without a robot
 
@@ -55,12 +54,14 @@ conda env create -f environment.yml    # creates the 'tron2_visual_grasp' env
 ./run.sh demo                          # then open http://localhost:8888/
 ```
 
-The web console shows a 3D view of TRON2 (its official model from [tron2-robot-description](https://github.com/limxdynamics/tron2-robot-description), downloaded on first run, about 50 MB) next to a top view and the rendered wrist-camera image. The simulated robot spots a ball, drives up to it, kneels, tracks the ball with the arm and picks it up. Then it stands up and goes after the next ball, until you press **Stop** or Ctrl+C. Detection, grasp solving and the mission are the same code that runs on the robot. Only the drivers are simulated, with simple kinematics and no physics. `./run.sh demo --cycles 3` stops after three balls.
+Open `http://localhost:8888/`: the simulated TRON2 spots a ball, drives up, kneels, picks it up and goes after the next one until you press **Stop** or Ctrl+C (`--cycles 3` stops after three). See [Simulation demo](#simulation-demo-demo) for what is simulated.
+
+`run.sh` finds the `tron2_visual_grasp` env through `conda info --base`; set `TVG_PYTHON=/path/to/python` to use another interpreter.
 
 ### On the robot
 
 > [!WARNING]
-> This code drives a real robot, and most commands move it **as soon as they connect**. Read [Safety](#safety) first and keep the emergency stop within reach.
+> Most commands move the robot **as soon as they connect**. Read [Safety](#safety) first.
 
 ```bash
 ./run.sh pose       # 1. robot is reachable (read-only)
@@ -70,28 +71,15 @@ The web console shows a 3D view of TRON2 (its official model from [tron2-robot-d
 ./run.sh grasp      # 5. the real thing
 ```
 
-Open `http://<host-ip>:8888` during `dry-run` or `grasp` to watch the camera views and tune detection live.
-
-## 🧭 How it works
+## How it works
 
 <p align="center">
   <img src="docs/media/mission_en.png" alt="One cycle of the grasp mission: watch, approach, kneel and pitch, track and grasp, drop and stand, then repeat" width="100%">
 </p>
 
-1. **Watch**: the arm holds a look-ahead pose and the detector scans each frame.
-2. **Approach**: a 2D visual servo steers the base until the target sits at the right spot in the image.
-3. **Kneel and look down**: the robot kneels and pitches its body so the wrist camera sees the target from above.
-4. **Grasp**: depth + hand-eye calibration give the grasp pose in the robot base frame; the arm closes in while tracking the target.
-5. **Drop and repeat**: the object is released at the drop pose, the robot stands up and starts watching again.
+Watch → visual-servo approach → kneel and pitch the body → grasp with the wrist camera while tracking the ball → drop, stand up, repeat. Depth plus the hand-eye calibration give the grasp pose in the robot base frame ([details](#grasp-mission-grasp)).
 
-## 🗺️ Roadmap
-
-- [x] Tennis-ball pickup on TRON2 with a wrist D405
-- [ ] More object types beyond tennis balls
-
-Ideas and requests are welcome in the [issues](../../issues).
-
-## 🔗 Related LimX Dynamics projects
+## Related LimX Dynamics projects
 
 | Project | What it is |
 |---------|------------|
@@ -102,22 +90,7 @@ Ideas and requests are welcome in the [issues](../../issues).
 
 ---
 
-## 📖 Documentation
-
-- [Hardware](#hardware)
-- [Safety](#safety)
-- [Installation](#installation)
-- [Commands](#commands)
-- [Ball detection](#ball-detection)
-- [Hand-eye calibration](#hand-eye-calibration)
-- [Grasp mission](#grasp-mission-grasp)
-- [Layout](#layout)
-- [Troubleshooting](#troubleshooting)
-- [Known limitations](#known-limitations)
-- [Support and contributing](#support-and-contributing)
-- [License and acknowledgements](#license-and-acknowledgements)
-
-### Hardware
+## Hardware
 
 | Component | Model |
 |-----------|-------|
@@ -134,7 +107,7 @@ sudo curl -fsSL -o /etc/udev/rules.d/99-realsense-libusb.rules \
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-### Safety
+## Safety
 
 This code drives a real robot. Read this section before running anything other than `dry-run`, `pose` and `detect`.
 
@@ -145,7 +118,7 @@ This code drives a real robot. Read this section before running anything other t
 - **Some values belong to our robot.** Check `robot.tron2.accid` (`null` learns it from the robot), `robot.tron2.prepare_ee_pose`, `calibration.aruco.marker_length_m`, `mission.watch_joints` and `mission.drop_joints` before the first run.
 - **What the TRON2 driver guards against** ([drivers/robot/tron2_driver.py](drivers/robot/tron2_driver.py)): it refuses to send non-finite (NaN / inf) targets, caps every base twist at `robot.tron2.max_twist_mps` / `max_twist_rps`, ignores malformed replies instead of using them as the measured pose, pauses the arm stream when pose feedback goes stale, and stops with an error when the connection drops. These are software guards, not a safety system: they do not replace the emergency stop.
 
-#### Stopping
+### Stopping
 
 - **Ctrl+C** takes effect promptly and runs a cleanup:
   - `grasp`: the base is commanded to stop; if a kneel was requested and the robot has not stood up yet, the arm folds to `robot.tron2.park_joints` and the robot stands up (it stays kneeling if the arm cannot park); finally the arm folds to the park joints (if not already there) and the robot disconnects. A second Ctrl+C during this cleanup abandons it, which can leave the robot kneeling.
@@ -155,26 +128,15 @@ This code drives a real robot. Read this section before running anything other t
 - **`kill <pid>` (SIGTERM) or closing the terminal** ends the process at once with no cleanup; the arm and body stay as they are, possibly kneeling. `kill -INT <pid>` runs the Ctrl+C cleanup, unless the process was started with SIGINT ignored (for example with `&` from a non-interactive script).
 - Once commands stop arriving, the robot relies on its controller: per the notes in [drivers/robot/tron2_driver.py](drivers/robot/tron2_driver.py), the arm latches a hold after its 0.2 s command timeout, and the base stops when `request_twist` goes quiet. Confirm this on your robot.
 
-#### Web debug page
+### Web debug page
 
 `grasp`, `dry-run`, `calib` and `verify` serve a debug page on port 8888, on every network interface and without authentication. Anyone who can reach it can watch the camera streams and press its buttons (Stop; Capture / Finish during calibration); on `grasp` / `dry-run` they can also change the HSV thresholds and camera exposure, and with them what the robot drives toward. Use it only on a trusted network, or turn it off with `--web-port 0` (or `mission.web_port: 0` for `grasp` / `dry-run`).
 
-### Installation
-
-```bash
-git clone https://github.com/limxdynamics/tron2_visual_grasp.git
-cd tron2_visual_grasp
-conda env create -f environment.yml    # creates the 'tron2_visual_grasp' env
-```
-
-`run.sh` finds the `tron2_visual_grasp` env through `conda info --base`; set `TVG_PYTHON=/path/to/python` to use another interpreter.
-
-### Commands
+## Commands
 
 Launch everything with `./run.sh <command>`, never `python scripts/...` directly.
 
-> [!WARNING]
-> Every command except `demo`, `dry-run`, `pose`, and `detect` moves the robot as soon as it connects, without asking. Read [Safety](#safety) first and keep the emergency stop within reach.
+Every command except `demo`, `dry-run`, `pose` and `detect` moves the robot as soon as it connects; see [Safety](#safety).
 
 | Command | Purpose |
 |---------|---------|
@@ -188,7 +150,7 @@ Launch everything with `./run.sh <command>`, never `python scripts/...` directly
 | `grasp` | Watch in place → approach → kneel and grasp → release → stand up, repeating |
 | `shell <script>` | Run any script in the project environment |
 
-### Ball detection
+## Ball detection
 
 The detector lives in [utils/opencv_tennis.py](utils/opencv_tennis.py); its parameters are under `detection.tennis` in `config/default.yaml`:
 
@@ -208,7 +170,7 @@ The detector lives in [utils/opencv_tennis.py](utils/opencv_tennis.py); its para
 
 **Tuning on site**: the `grasp` / `dry-run` debug page (`http://<host-ip>:8888`) has live sliders for the HSV bounds and camera exposure. Changes only last for the running process; copy good values back into the config.
 
-### Hand-eye calibration
+## Hand-eye calibration
 
 <p align="center">
   <img src="docs/media/handeye_en.png" alt="Hand-eye calibration: print the marker, ./run.sh calib, solve, ./run.sh verify" width="100%">
@@ -219,7 +181,7 @@ The detector lives in [utils/opencv_tennis.py](utils/opencv_tennis.py); its para
 3. Run `./run.sh verify` to check it.
 4. If grasps still show a constant offset, fine-tune x / y / z (meters) in `calibration.hand_eye_compensation_m`.
 
-### Grasp mission (`grasp`)
+## Grasp mission (`grasp`)
 
 Implemented in [scripts/squat_grasp.py](scripts/squat_grasp.py), configured under `mission`:
 
@@ -243,6 +205,9 @@ Grasp-pose parameters (pre-grasp offset, insertion depth, minimum height, jaw or
   <img src="docs/media/posture_timeline_en.png" alt="Posture timing around the grasp with the default.yaml dwell times" width="100%">
 </p>
 
+<details>
+<summary>Posture protocol details (kneel, pitch, stand)</summary>
+
 The squat uses `request_wf_stand_kneel` with `data.action: kneel` / `stand`, not
 height increments. The body pitches
 only after the kneel has finished (`kneel_dwell_s`): the driver first resets the
@@ -261,17 +226,22 @@ or timed out. Neither posture API reports when the body stops moving: grasping
 starts only after `kneel_dwell_s` + `pitch_dwell_s`, so tune them on hardware,
 and recheck grasp height limits for the new posture.
 
+</details>
+
 Common options: `--target-class <name>`, `--display` (local preview windows), `--web-port <port>` (`0` disables the page), `--grasp-timeout <s>`, `--cycles <n>` (stop after n cycles), `--config <path>`. `GRASP_DEBUG=0` silences the transform dump printed for each grasp solve.
 
-**Simulation (`demo`)**: `--sim` (what `./run.sh demo` passes) swaps in the drivers under [drivers/sim/](drivers/sim/):
+## Simulation demo (`demo`)
+
+`./run.sh demo` runs `squat_grasp.py --sim`: detection, grasp solving and the mission are the code that runs on the robot, and only the drivers under [drivers/sim/](drivers/sim/) are simulated:
+
 - **Wrist camera:** rendered from the arm pose, a floor plus a tennis ball with RGB and depth.
 - **TRON2:** kinematic, covering the base twist, kneel/stand and body pitch, the arm (via the piper_x forward kinematics) and the gripper. A grasp succeeds when the TCP (the point between the fingertips) reaches the ball. Body dimensions follow the WFYG_TRON2A model.
-- **3D view:** [drivers/sim/view3d.py](drivers/sim/view3d.py) poses the WFYG_TRON2A model with MuJoCo (kinematics and rendering only, no physics). The legs are solved so the wheels stay on the floor. The kneel, with the legs folded and the knees down, is an illustration, not the real WF kneel. The model is fetched at a pinned commit into `~/.cache/tron2_visual_grasp` (set `TVG_ROBOT_MODEL` to use a local `robot.xml`). Without a GPU each frame can take about a second. On a machine without a display, set `MUJOCO_GL=egl` or `osmesa`, or run under `xvfb-run`. Turn it off with `sim.view3d.enabled: false`.
+- **3D view:** [drivers/sim/view3d.py](drivers/sim/view3d.py) poses the WFYG_TRON2A model with MuJoCo (kinematics and rendering only, no physics). The legs are solved so the wheels stay on the floor. The kneel, with the legs folded and the knees down, is an illustration, not the real WF kneel. The model (about 50 MB) is fetched on first run at a pinned commit into `~/.cache/tron2_visual_grasp` (set `TVG_ROBOT_MODEL` to use a local `robot.xml`). Without a GPU each frame can take about a second. On a machine without a display, set `MUJOCO_GL=egl` or `osmesa`, or run under `xvfb-run`. Turn it off with `sim.view3d.enabled: false`.
 - **Hand-eye:** a fixed transform, shipped in `config/calibration/sim_d405/hand_eye.npz`.
 
 Settings live under `sim` in the config, and `sim.overrides` is merged over the rest of the file in demo mode only (shorter posture waits). The simulator has no dynamics, slip, latency or sensor noise beyond a little image grain, so a working demo says nothing about tuning for the real robot.
 
-### Layout
+## Layout
 
 <p align="center">
   <img src="docs/media/architecture_en.png" alt="Entry points and hardware-independent utils use make_robot and make_camera; drivers implement TRON2, PiperX, RealSense D405 and their simulated versions" width="100%">
@@ -292,26 +262,24 @@ scripts/                 entry points for each command
 run.sh                   launcher
 ```
 
-### Troubleshooting
+## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
 | TRON2 connection timeout | Check `robot.tron2.robot_ip` / `port`; the host must be on the robot's subnet |
-| Balls missed or false detections | Watch `./run.sh detect`, tune HSV and exposure on the `dry-run` web page, then copy them into `detection.tennis` |
+| Balls missed or false detections | Watch `./run.sh detect`, then tune on site as in [Ball detection](#ball-detection) |
 | `Marker not in view` during calibration | Move the marker into the camera view |
 | Grasps consistently offset | Recalibrate, or adjust `calibration.hand_eye_compensation_m` |
 | Ball near the image edge is ignored | Expected: border-touching balls are dropped and picked up again once closer |
 | Conda env not found | Create it with `conda env create -f environment.yml`, or set `TVG_PYTHON=/path/to/python` |
 
-### Known limitations
+## Known limitations
 
-- Detection is classical HSV colour plus round-contour filtering: lighting changes need retuning, and other yellow-green round objects can be taken for balls.
-- Nothing detects obstacles, people or drop-offs; the approach drives straight at the target.
+- Detection is classical HSV colour plus round-contour filtering, so lighting changes need retuning; it has no obstacle or person detection (see [Safety](#safety)).
 - The TRON2 gripper reports no jaw width, so an empty grasp is reported as a success.
-- Kneel, stand and body pitch report no completion; the mission waits fixed dwell times (see [Grasp mission](#grasp-mission-grasp)).
 - `grasp` and `pose` support TRON2 only; `home`, `calib` and `verify` also run on a CAN-connected PiperX (`robot.type: piperx`).
 
-### Support and contributing
+## Support and contributing
 
 - **Status**: maintained by LimX Dynamics as an open-source demo, with community support on a best-effort basis (no guaranteed response time).
 - **Bugs, feature requests and questions**: open an issue in this repository; please include the commit you are on, your robot model and firmware, and the relevant log output.
@@ -319,7 +287,7 @@ run.sh                   launcher
 - **Contributions**: see the [contributing guide](https://github.com/limxdynamics/.github/blob/main/CONTRIBUTING.md); for anything beyond a small fix, please open an issue first.
 - **Tests and CI**: hardware-free tests (perception on synthetic images, and the TRON2 driver against a mock of the upper-layer protocol) run on every push and pull request. Run them locally with `pip install -r tests/requirements.txt && python -m pytest tests`; for motion changes, also check `./run.sh dry-run` and `./run.sh detect` on the robot.
 
-### License and acknowledgements
+## License and acknowledgements
 
 Licensed under the Apache License 2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
@@ -327,6 +295,3 @@ Part of the camera driver, hand-eye calibration and grasp geometry code is deriv
 
 Dependencies are installed separately and keep their own licenses; pyAgxArm and python-can, for example, are LGPL-3.0. The 3D model used by `./run.sh demo` is downloaded at run time from [tron2-robot-description](https://github.com/limxdynamics/tron2-robot-description) (Apache-2.0) and is not part of this repository.
 
----
-
-<p align="center">If this project helps you, a ⭐ helps others find it.</p>

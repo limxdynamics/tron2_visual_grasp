@@ -27,6 +27,8 @@
   <br><sub>One full pick cycle in the hardware-free demo (<code>./run.sh demo</code>), simulated with the official TRON2 model.</sub>
 </p>
 
+> **Part of the TRON2 open-source ecosystem.** Where to start and the other TRON2 repositories: [TRON2 quick start](https://github.com/limxdynamics/limxdynamics/blob/main/doc/quickstart.md#tron2).
+
 TRON2 watches the floor with its wrist RealSense D405, drives itself up to the target, kneels,
 locks the grasp onto the object with the same camera, drops it off, stands back up, and goes
 back to watching for the next one. The first built-in target is the **tennis ball**; more object types

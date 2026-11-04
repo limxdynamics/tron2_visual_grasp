@@ -27,6 +27,8 @@
   <br><sub>无硬件演示模式（<code>./run.sh demo</code>）下的一次完整抓取，使用 TRON2 官方模型模拟。</sub>
 </p>
 
+> **TRON2 开源生态的一部分。** 上手路线和其他 TRON2 仓库：[TRON2 快速上手](https://github.com/limxdynamics/limxdynamics/blob/main/doc/quickstart_cn.md#tron2)。
+
 TRON2 用腕部的 RealSense D405 观察地面，自己走到目标跟前，跪下，用同一个相机锁定抓取位姿，
 抓起来投放后再站起来，回到观察状态等待下一个。当前内置的第一个目标是**网球**，后续会支持更多物体。
 

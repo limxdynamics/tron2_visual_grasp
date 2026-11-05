@@ -16,16 +16,12 @@
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2022.04%20%7C%20Jetson-E95420.svg?logo=ubuntu&logoColor=white" alt="Ubuntu 22.04 | Jetson">
   <img src="https://img.shields.io/badge/Robot-LimX%20TRON2-black.svg" alt="Robot: LimX TRON2">
   <img src="https://img.shields.io/badge/GPU-not%20required-success.svg" alt="GPU not required">
+  <a href="https://github.com/limxdynamics/limxdynamics/blob/main/doc/wechat_qr.png"><img src="https://img.shields.io/badge/WeChat-Developer%20Community-07C160?logo=wechat&logoColor=white" alt="WeChat Community"></a>
 </p>
 
 <p align="center">
   <a href="./README_zh.md">简体中文</a> | <a href="./README.md">English</a>
 </p>
-
-<!-- limx-community:start -->
-<!-- Managed by limxdynamics/limxdynamics/.github/community/sync_community.py; QR code: doc/wechat_qr.png in that repo -->
-<p align="center"><a href="https://github.com/limxdynamics/limxdynamics/blob/main/doc/wechat_qr.png"><img src="https://img.shields.io/badge/Join%20Our%20WeChat%20Community-All%20Projects%20Welcome-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat Community"></a></p>
-<!-- limx-community:end -->
 
 <p align="center">
   <img src="docs/media/demo.gif" alt="TRON2 spots a tennis ball, drives up, kneels and picks it up (simulation)" width="800">

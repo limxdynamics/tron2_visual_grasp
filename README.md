@@ -18,6 +18,7 @@
   <img src="https://img.shields.io/badge/GPU-not%20required-success.svg" alt="GPU not required">
   <a href="https://github.com/limxdynamics/limxdynamics/blob/main/doc/wechat_qr.png"><img src="https://img.shields.io/badge/WeChat-Developer%20Community-07C160?logo=wechat&logoColor=white" alt="WeChat Community"></a>
 </p>
+<p align="center"><sub>For partnership and procurement inquiries, contact <a href="mailto:opensource@limxdynamics.com">opensource@limxdynamics.com</a></sub></p>
 
 <p align="center">
   <a href="./README_zh.md">简体中文</a> | <a href="./README.md">English</a>
